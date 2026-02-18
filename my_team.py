@@ -147,18 +147,36 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
         successor = self.get_successor(game_state, action)
         food_list = self.get_food(successor).as_list()
         features['successor_score'] = -len(food_list)  # self.get_score(successor)
+        my_pos = successor.get_agent_state(self.index).get_position()
 
         # Compute distance to the nearest food
 
         if len(food_list) > 0:  # This should always be True,  but better safe than sorry
-            my_pos = successor.get_agent_state(self.index).get_position()
-            min_distance = min([self.get_maze_distance(my_pos, food) for food in food_list])
-            features['distance_to_food'] = min_distance
+            closest_food = min([self.get_maze_distance(my_pos, food) for food in food_list])
+            features['distance_to_food'] = closest_food
+
+        distance_to_safety = self.get_maze_distance(self.start, my_pos)
+        features['distance_to_safety'] = distance_to_safety
+
+        distance_to_defender = float("inf")
+        distance_to_defenders = game_state.get_agent_distances()
+        defenders = self.get_opponents(game_state)
+        for defender in defenders:
+            distance = distance_to_defenders [defender]
+            if distance < distance_to_defender:
+                distance_to_defender = distance
+        features['distance_defender'] = distance_to_defender
+
+
+
         return features
 
     def get_weights(self, game_state, action):
-        return {'successor_score': 100, 'distance_to_food': -1}
-
+        carrying = game_state.get_agent_state(self.index).num_carrying
+        if carrying < 5:
+            return {'successor_score': 100, 'distance_to_food': -1, 'distance_to_safety' : 0, 'distance_defender' : 5 }
+        else: 
+            return {'successor_score': 0, 'distance_to_food': 0, 'distance_to_safety' : -20, 'distance_defender' : 10}
 
 class DefensiveReflexAgent(ReflexCaptureAgent):
     """
