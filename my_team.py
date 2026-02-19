@@ -25,6 +25,7 @@ import util
 
 from capture_agents import CaptureAgent
 from game import Directions
+from game import grid
 from util import nearest_point
 
 
@@ -33,7 +34,7 @@ from util import nearest_point
 #################
 
 def create_team(first_index, second_index, is_red,
-                first='OffensiveReflexAgent', second='DefensiveAgent', num_training=0):
+                first='OffensiveReflexAgent', second='DefensiveReflexAgent', num_training=0):
     """
     This function should return a list of two agents that will form the
     team, initialized using firstIndex and secondIndex as their agent
@@ -178,7 +179,7 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
         else: 
             return {'successor_score': 0, 'distance_to_food': 0, 'distance_to_safety' : -20, 'distance_defender' : 10}
 
-class DefensiveAgent(ReflexCaptureAgent):
+class DefensiveReflexAgent(ReflexCaptureAgent):
     """
     A reflex agent that keeps its side Pacman-free. Again,
     this is to give you an idea of what a defensive agent
@@ -189,9 +190,10 @@ class DefensiveAgent(ReflexCaptureAgent):
     def get_features(self, game_state, action):
         features = util.Counter()
         successor = self.get_successor(game_state, action)
-
         my_state = successor.get_agent_state(self.index)
         my_pos = my_state.get_position()
+        midden_x = grid.width // 2
+        midden_y = grid.height // 2
 
         # Computes whether we're on defense (1) or offense (0)
         features['on_defense'] = 1
@@ -204,12 +206,25 @@ class DefensiveAgent(ReflexCaptureAgent):
         if len(invaders) > 0:
             dists = [self.get_maze_distance(my_pos, a.get_position()) for a in invaders]
             features['invader_distance'] = min(dists)
+        
+            if self.red:
+                grens = midden_x - 1
+            else:
+                grens = midden_x
+            afstand_tot_grens = abs(my_pos[0] - grens)
+            features['naar_grens_gaan'] = afstand_tot_grens
+
+            afstand_tot_midden_y = abs(my_pos[1] - midden_y)
+            features['naar_midden_gaan'] = afstand_tot_midden_y
+            
 
         if action == Directions.STOP: features['stop'] = 1
         rev = Directions.REVERSE[game_state.get_agent_state(self.index).configuration.direction]
         if action == rev: features['reverse'] = 1
 
+
+
         return features
 
     def get_weights(self, game_state, action):
-        return {'num_invaders': 1000, 'on_defense': 100, 'invader_distance': -10, 'stop': -100, 'reverse': -2}
+        return {'num_invaders': -1000, 'on_defense': 100, 'invader_distance': -10, 'stop': -100, 'reverse': -2, 'naar_grens_gaan' : -100, 'naar_midden_gaan' : -100}
