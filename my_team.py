@@ -223,8 +223,6 @@ class DefensiveAgent(ReflexCaptureAgent):
         rev = Directions.REVERSE[game_state.get_agent_state(self.index).configuration.direction]
         if action == rev: features['reverse'] = 1
 
-
-
         return features
 
     def get_weights(self, game_state, action):
