@@ -159,20 +159,30 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
         features['distance_to_safety'] = distance_to_safety
 
         distance_to_defender = float("inf")
-        distance_to_defenders = game_state.get_agent_distances()
-        defenders = self.get_opponents(game_state)
+        defenders = self.get_opponents(successor)
         for defender in defenders:
-            distance = distance_to_defenders [defender]
-            if distance < distance_to_defender:
-                distance_to_defender = distance
-        features['distance_defender'] = distance_to_defender
+            enemy_position = successor.get_agent_state(defender).get_position()
+           
+            if enemy_position is not None and not successor.get_agent_state(defender).is_pacman:
+                distance = self.get_maze_distance(my_pos, enemy_position)
+                if distance < distance_to_defender:
+                   distance_to_defender = distance
+
+        if distance_to_defender == float("inf"):
+            features['distance_defender'] = 10
+        else: 
+            if distance_to_defender <= 1:
+                features['distance_defender'] = -1000
+            else:
+                features['distance_defender'] = distance_to_defender
+
 
         return features
 
     def get_weights(self, game_state, action):
         carrying = game_state.get_agent_state(self.index).num_carrying
         if carrying < 5:
-            return {'successor_score': 100, 'distance_to_food': -1, 'distance_to_safety' : 0, 'distance_defender' : 5 }
+            return {'successor_score': 100, 'distance_to_food': -1, 'distance_to_safety' : 0, 'distance_defender' : 3 }
         else: 
             return {'successor_score': 0, 'distance_to_food': 0, 'distance_to_safety' : -20, 'distance_defender' : 10}
 
@@ -192,7 +202,6 @@ class DefensiveAgent(ReflexCaptureAgent):
         my_pos = my_state.get_position()
         midden_x = game_state.data.layout.walls.width // 2
         midden_y = game_state.data.layout.walls.height // 2
-        waiting_point=(midden_x,midden_x)
 
         # Computes whether we're on defense (1) or offense (0)
         features['on_defense'] = 1
@@ -210,14 +219,11 @@ class DefensiveAgent(ReflexCaptureAgent):
                 grens = midden_x - 1
             else:
                 grens = midden_x
-            afstand_tot_grens = abs(my_pos[0] - grens)
-            features['naar_grens_gaan'] = afstand_tot_grens
-
-            afstand_tot_midden_y = abs(my_pos[1] - midden_y)
-            features['naar_midden_gaan'] = afstand_tot_midden_y
+            
+            waiting_point = self.get_maze_distance(my_pos, (grens, midden_y))
+            features['ga_naar_wachtpunt'] = waiting_point
             
         
-        features['go_to_waiting_point']= self.get_maze_distance(my_pos,waiting_point)
 
         if action == Directions.STOP: features['stop'] = 1
         rev = Directions.REVERSE[game_state.get_agent_state(self.index).configuration.direction]
@@ -226,4 +232,4 @@ class DefensiveAgent(ReflexCaptureAgent):
         return features
 
     def get_weights(self, game_state, action):
-        return {'num_invaders': -1000, 'on_defense': 100, 'invader_distance': -10, 'stop': -100, 'reverse': -2, 'go_to_waiting_point' : -100}
+        return {'num_invaders': -1000, 'on_defense': 100, 'invader_distance': -10, 'stop': -100, 'reverse': -2, 'ga_naar_wachtpunt' : -2}
