@@ -136,11 +136,32 @@ class ReflexCaptureAgent(CaptureAgent):
 
 
 class OffensiveReflexAgent(ReflexCaptureAgent):
-    """
-  A reflex agent that seeks food. This is an agent
-  we give you to get an idea of what an offensive agent might look like,
-  but it is by no means the best or only way to build an offensive agent.
-  """
+    
+    def breadth_first_search(self, initial_state, goal, game_state, verboden_wegen):
+        agenda = util.Queue()
+        agenda.push((initial_state, []))
+        closed = set()
+        muren = game_state.data.layout.walls
+    
+
+        while True:
+            if agenda.is_empty():
+                return 10000
+            current_state, actions = agenda.pop()
+        
+            if current_state in goal:
+                return len(actions)
+            
+            if current_state  not in closed:
+                closed.add(current_state)
+                x, y = current_state
+                for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+                    next_state = (int(x + dx), int(y + dy))
+                    if not muren[next_state[0]][next_state[1]] and next_state not in verboden_wegen:
+                        list_actions = list(actions)
+                        list_actions.append(next_state)
+                        agenda.push((next_state, list_actions))
+
 
     def get_features(self, game_state, action):
         features = util.Counter()
@@ -149,51 +170,54 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
         features['successor_score'] = -len(food_list)  # self.get_score(successor)
         my_pos = successor.get_agent_state(self.index).get_position()
 
-        # Compute distance to the nearest food
-
-        if len(food_list) > 0:  # This should always be True,  but better safe than sorry
-            closest_food = min([self.get_maze_distance(my_pos, food) for food in food_list])
-            features['distance_to_food'] = closest_food
 
         distance_to_safety = self.get_maze_distance(self.start, my_pos)
         features['distance_to_safety'] = distance_to_safety
 
+        verboden_wegen = []
         distance_to_defender = float("inf")
         defenders = self.get_opponents(successor)
         for defender in defenders:
             enemy_position = successor.get_agent_state(defender).get_position()
            
             if enemy_position is not None and not successor.get_agent_state(defender).is_pacman:
+                verboden_wegen.append(enemy_position)
                 distance = self.get_maze_distance(my_pos, enemy_position)
                 if distance < distance_to_defender:
                    distance_to_defender = distance
+
+        if len(food_list) > 0:
+            closest_food = self.breadth_first_search(my_pos, food_list, game_state, verboden_wegen)
+            features['distance_to_food'] = closest_food
 
         if distance_to_defender == float("inf"):
             features['distance_defender'] = 10
         else: 
             if distance_to_defender <= 1:
-                features['distance_defender'] = -1000
+                features['distance_to_safety'] = -1000
             else:
-                features['distance_defender'] = distance_to_defender
+                features['distance_defender'] = distance_to_defender 
 
+        if action == Directions.STOP: features['stop'] = 1
+        rev = Directions.REVERSE[game_state.get_agent_state(self.index).configuration.direction]
+        if action == rev: features['reverse'] = 1
+
+        features['Aantal_acties'] = len(successor.get_legal_actions(self.index))
 
         return features
 
     def get_weights(self, game_state, action):
         carrying = game_state.get_agent_state(self.index).num_carrying
+
         if carrying < 5:
-            return {'successor_score': 100, 'distance_to_food': -1, 'distance_to_safety' : 0, 'distance_defender' : 3 }
+            return {'successor_score': 100, 'distance_to_food': -3, 'distance_to_safety' : 0, 'distance_defender' : 3, 'stop': -100,
+                'reverse': -2, 'Aantal_acties' : 1}
         else: 
-            return {'successor_score': 0, 'distance_to_food': 0, 'distance_to_safety' : -20, 'distance_defender' : 10}
+            return {'successor_score': 50, 'distance_to_food': 0, 'distance_to_safety' : -20, 'distance_defender' : 10, 'stop': -100,
+                'reverse': -2, 'Aantal_acties' : 1}
 
 
 class DefensiveAgent(ReflexCaptureAgent):
-    """
-    A reflex agent that keeps its side Pacman-free. Again,
-    this is to give you an idea of what a defensive agent
-    could be like.  It is not the best or only way to make
-    such an agent.
-    """
 
     def get_features(self, game_state, action):
         features = util.Counter()
