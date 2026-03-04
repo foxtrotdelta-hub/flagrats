@@ -136,7 +136,6 @@ class ReflexCaptureAgent(CaptureAgent):
 
 
 class OffensiveReflexAgent(ReflexCaptureAgent):
-    
     def breadth_first_search(self, initial_state, goal, game_state, verboden_wegen):
         agenda = util.Queue()
         agenda.push((initial_state, []))
@@ -190,11 +189,16 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
             closest_food = self.breadth_first_search(my_pos, food_list, game_state, verboden_wegen)
             features['distance_to_food'] = closest_food
 
+        capsules = self.get_capsules(game_state)
+        if len(capsules) > 0:
+            features['distance_to_capsule'] = self.breadth_first_search(my_pos, capsules, game_state, verboden_wegen)
+        else: features ['distance_to_capsule'] = 0
+
         if distance_to_defender == float("inf"):
             features['distance_defender'] = 10
         else: 
             if distance_to_defender <= 1:
-                features['distance_to_safety'] = -1000
+                features['distance_defender'] = -10000
             else:
                 features['distance_defender'] = distance_to_defender 
 
@@ -208,6 +212,25 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
 
     def get_weights(self, game_state, action):
         carrying = game_state.get_agent_state(self.index).num_carrying
+        enemies = [game_state.get_agent_state(i) for i in self.get_opponents(game_state)]
+        visible_enemies = [enemie for enemie in enemies if enemie.get_position() is not None ]
+        my_pos = game_state.get_agent_state(self.index).get_position()
+        chased = False
+        capsules = self.get_capsules(game_state)
+
+
+        if len(enemies) > 0:
+            distances = [self.get_maze_distance(my_pos, enemie.get_position()) for enemie in visible_enemies]
+            if len(distances) > 0 and min(distances) <= 5:
+                chased = True
+
+        if chased == True:
+            if len(capsules) > 0:
+                return {'successor_score': 0, 'distance_to_food': 0, 'distance_to_safety' : 0, 'distance_defender' : 10, 'stop': -100,
+                'reverse': -2, 'Aantal_acties' : 1, 'distance_to_capsule' : -10}
+            else:{'successor_score': 0, 'distance_to_food': 0, 'distance_to_safety' : -20, 'distance_defender' : 10, 'stop': -100,
+                'reverse': -2, 'Aantal_acties' : 1, 'distance_to_capsule' : 0}
+                
 
         if carrying < 5:
             return {'successor_score': 100, 'distance_to_food': -3, 'distance_to_safety' : 0, 'distance_defender' : 3, 'stop': -100,
@@ -215,7 +238,7 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
         else: 
             return {'successor_score': 50, 'distance_to_food': 0, 'distance_to_safety' : -20, 'distance_defender' : 10, 'stop': -100,
                 'reverse': -2, 'Aantal_acties' : 1}
-
+        
 
 class DefensiveAgent(ReflexCaptureAgent):
 
@@ -224,8 +247,6 @@ class DefensiveAgent(ReflexCaptureAgent):
         successor = self.get_successor(game_state, action)
         my_state = successor.get_agent_state(self.index)
         my_pos = my_state.get_position()
-        midden_x = game_state.data.layout.walls.width // 2
-        midden_y = game_state.data.layout.walls.height // 2
 
         # Computes whether we're on defense (1) or offense (0)
         features['on_defense'] = 1
@@ -239,13 +260,22 @@ class DefensiveAgent(ReflexCaptureAgent):
             dists = [self.get_maze_distance(my_pos, a.get_position()) for a in invaders]
             features['invader_distance'] = min(dists)
         else:
-            if self.red:
-                grens = midden_x - 1
-            else:
-                grens = midden_x
-            
-            waiting_point = self.get_maze_distance(my_pos, (grens, midden_y))
-            features['ga_naar_wachtpunt'] = waiting_point
+            point_to_go = None
+            previous_state = self.get_previous_observation()
+            if previous_state is not None:
+                previous_food = self.get_food_you_are_defending(previous_state).as_list()
+                current_food = self.get_food_you_are_defending(game_state).as_list()
+
+                if len(previous_food) > len(current_food):
+                        point_to_go = list(set(previous_food) - set(current_food))[0]
+            if point_to_go == None:
+                midden_x = game_state.data.layout.walls.width // 2
+                midden_y = game_state.data.layout.walls.height // 2 
+                grens = midden_x -1 if self.red else midden_x
+                point_to_go = (grens, midden_y)
+
+    
+            features['ga_naar_wachtpunt'] = self.get_maze_distance(my_pos, point_to_go)
             
         
 
