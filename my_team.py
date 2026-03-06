@@ -213,14 +213,14 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
     def get_weights(self, game_state, action):
         carrying = game_state.get_agent_state(self.index).num_carrying
         enemies = [game_state.get_agent_state(i) for i in self.get_opponents(game_state)]
-        visible_enemies = [enemie for enemie in enemies if enemie.get_position() is not None ]
+        dangerous_enemies = [enemie for enemie in enemies if not enemie.is_pacman and enemie.get_position() is not None and enemie.scared_timer == 0 ]
         my_pos = game_state.get_agent_state(self.index).get_position()
         chased = False
         capsules = self.get_capsules(game_state)
 
 
         if len(enemies) > 0:
-            distances = [self.get_maze_distance(my_pos, enemie.get_position()) for enemie in visible_enemies]
+            distances = [self.get_maze_distance(my_pos, enemie.get_position()) for enemie in dangerous_enemies]
             if len(distances) > 0 and min(distances) <= 5:
                 chased = True
 
@@ -228,16 +228,16 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
             if len(capsules) > 0:
                 return {'successor_score': 0, 'distance_to_food': 0, 'distance_to_safety' : 0, 'distance_defender' : 10, 'stop': -100,
                 'reverse': -2, 'Aantal_acties' : 1, 'distance_to_capsule' : -10}
-            else:{'successor_score': 0, 'distance_to_food': 0, 'distance_to_safety' : -20, 'distance_defender' : 10, 'stop': -100,
+            else: return {'successor_score': 0, 'distance_to_food': 0, 'distance_to_safety' : -20, 'distance_defender' : 10, 'stop': -100,
                 'reverse': -2, 'Aantal_acties' : 1, 'distance_to_capsule' : 0}
                 
 
-        if carrying < 5:
-            return {'successor_score': 100, 'distance_to_food': -3, 'distance_to_safety' : 0, 'distance_defender' : 3, 'stop': -100,
-                'reverse': -2, 'Aantal_acties' : 1}
-        else: 
+        if carrying > 0 and game_state.data.timeleft < 100:
             return {'successor_score': 50, 'distance_to_food': 0, 'distance_to_safety' : -20, 'distance_defender' : 10, 'stop': -100,
-                'reverse': -2, 'Aantal_acties' : 1}
+                'reverse': -2, 'Aantal_acties' : 1,  'distance_to_capsule' : 0}
+        else: 
+            return {'successor_score': 100, 'distance_to_food': -3, 'distance_to_safety' : 0, 'distance_defender' : 3, 'stop': -100,
+                'reverse': -2, 'Aantal_acties' : 1,  'distance_to_capsule' : 0}
         
 
 class DefensiveAgent(ReflexCaptureAgent):
