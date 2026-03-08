@@ -63,6 +63,7 @@ class ReflexCaptureAgent(CaptureAgent):
     def __init__(self, index, time_for_computing=.1):
         super().__init__(index, time_for_computing)
         self.start = None
+        self.eaten_dot = None
 
     def register_initial_state(self, game_state):
         self.start = game_state.get_agent_position(self.index)
@@ -247,6 +248,26 @@ class DefensiveAgent(ReflexCaptureAgent):
         successor = self.get_successor(game_state, action)
         my_state = successor.get_agent_state(self.index)
         my_pos = my_state.get_position()
+        current_position  = game_state.get_agent_position(self.index)
+
+        if self.eaten_dot == current_position:
+            self.eaten_dot = None
+
+        current_enemies = [game_state.get_agent_state(i) for i in self.get_opponents(successor)]
+        current_invaders = [a for a in current_enemies if a.is_pacman and a.get_position() is not None]
+
+        if len(current_invaders) > 0:
+            self.eaten_dot = None
+        else:
+            previous_state = self.get_previous_observation()
+            if previous_state is not None:
+                previous_food = self.get_food_you_are_defending(previous_state).as_list()
+                current_food = self.get_food_you_are_defending(game_state).as_list()
+
+                if len(previous_food) > len(current_food):
+                        eaten_dots = list(set(previous_food) - set(current_food))
+                        if eaten_dots:
+                            self.eaten_dot = eaten_dots[0]
 
         # Computes whether we're on defense (1) or offense (0)
         features['on_defense'] = 1
@@ -259,24 +280,19 @@ class DefensiveAgent(ReflexCaptureAgent):
         if len(invaders) > 0:
             dists = [self.get_maze_distance(my_pos, a.get_position()) for a in invaders]
             features['invader_distance'] = min(dists)
+            self.eaten_dot = None
         else:
-            point_to_go = None
-            previous_state = self.get_previous_observation()
-            if previous_state is not None:
-                previous_food = self.get_food_you_are_defending(previous_state).as_list()
-                current_food = self.get_food_you_are_defending(game_state).as_list()
-
-                if len(previous_food) > len(current_food):
-                        point_to_go = list(set(previous_food) - set(current_food))[0]
-            if point_to_go == None:
+            if self.eaten_dot is not None:
+                point_to_go = self.eaten_dot
+            else:
                 midden_x = game_state.data.layout.walls.width // 2
                 midden_y = game_state.data.layout.walls.height // 2 
                 grens = midden_x -1 if self.red else midden_x
                 point_to_go = (grens, midden_y)
+                walls = game_state.data.lay_out.walls
 
     
             features['ga_naar_wachtpunt'] = self.get_maze_distance(my_pos, point_to_go)
-            
         
 
         if action == Directions.STOP: features['stop'] = 1
