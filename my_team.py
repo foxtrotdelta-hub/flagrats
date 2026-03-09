@@ -33,7 +33,7 @@ from util import nearest_point
 #################
 
 def create_team(first_index, second_index, is_red,
-                first='OffensiveReflexAgent', second='DefensiveAgent', num_training=0):
+                first='AdaptiveAgent', second='DefensiveAgent', num_training=0):
     """
     This function should return a list of two agents that will form the
     team, initialized using firstIndex and secondIndex as their agent
@@ -134,7 +134,9 @@ class ReflexCaptureAgent(CaptureAgent):
         a counter or a dictionary.
         """
         return {'successor_score': 1.0}
-
+    def is_winning(self, game_state):
+        score = self.get_score(game_state)
+        return score > 0 if self.red else score < 0 
 
 class OffensiveReflexAgent(ReflexCaptureAgent):
     def breadth_first_search(self, initial_state, goal, game_state, verboden_wegen):
@@ -289,7 +291,7 @@ class DefensiveAgent(ReflexCaptureAgent):
                 midden_y = game_state.data.layout.walls.height // 2 
                 grens = midden_x -1 if self.red else midden_x
                 point_to_go = (grens, midden_y)
-                walls = game_state.data.lay_out.walls
+                walls = game_state.data.layout.walls
 
     
             features['ga_naar_wachtpunt'] = self.get_maze_distance(my_pos, point_to_go)
@@ -303,3 +305,18 @@ class DefensiveAgent(ReflexCaptureAgent):
 
     def get_weights(self, game_state, action):
         return {'num_invaders': -1000, 'on_defense': 100, 'invader_distance': -10, 'stop': -100, 'reverse': -2, 'ga_naar_wachtpunt' : -2}
+
+
+class AdaptiveAgent(OffensiveReflexAgent):
+
+    def get_features(self, game_state, action):
+        if self.is_winning(game_state):
+            return DefensiveAgent.get_features(self, game_state, action)
+        else:
+            return OffensiveReflexAgent.get_features(self, game_state, action)
+
+    def get_weights(self, game_state, action):
+        if self.is_winning(game_state):
+            return DefensiveAgent.get_weights(self, game_state, action)
+        else:
+            return OffensiveReflexAgent.get_weights(self, game_state, action)
