@@ -33,7 +33,7 @@ from util import nearest_point
 #################
 
 def create_team(first_index, second_index, is_red,
-                first='AdaptiveAgent', second='DefensiveAgent', num_training=0):
+                first='OffensiveReflexAgent', second='DefensiveAgent', num_training=0):
     """
     This function should return a list of two agents that will form the
     team, initialized using firstIndex and secondIndex as their agent
@@ -68,6 +68,16 @@ class ReflexCaptureAgent(CaptureAgent):
     def register_initial_state(self, game_state):
         self.start = game_state.get_agent_position(self.index)
         CaptureAgent.register_initial_state(self, game_state)
+
+        walls = game_state.data.layout.walls
+        midden_x = walls.width // 2
+        grens = midden_x - 1 if self.red else midden_x
+        self.grens_punten = []
+
+        for y_coordinaten in range(walls.height):
+            if not walls[grens][y_coordinaten]:
+                self.grens_punten.append((grens, y_coordinaten))
+
 
     def choose_action(self, game_state):
         """
@@ -136,9 +146,8 @@ class ReflexCaptureAgent(CaptureAgent):
         return {'successor_score': 1.0}
     def is_winning(self, game_state):
         score = self.get_score(game_state)
-        return score > 0 if self.red else score < 0 
+        return score > 0 if self.red else score < 0
 
-class OffensiveReflexAgent(ReflexCaptureAgent):
     def breadth_first_search(self, initial_state, goal, game_state, verboden_wegen):
         agenda = util.Queue()
         agenda.push((initial_state, []))
@@ -162,28 +171,46 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
                     if not muren[next_state[0]][next_state[1]] and next_state not in verboden_wegen:
                         list_actions = list(actions)
                         list_actions.append(next_state)
-                        agenda.push((next_state, list_actions))
-
-
-    def get_features(self, game_state, action):
+                        agenda.push((next_state, list_actions)) 
+    
+    def get_offensive_features(self, game_state, action):
         features = util.Counter()
         successor = self.get_successor(game_state, action)
         food_list = self.get_food(successor).as_list()
         features['successor_score'] = -len(food_list)  # self.get_score(successor)
         my_pos = successor.get_agent_state(self.index).get_position()
+        current_position = game_state.get_agent_state(self.index).get_position()
+        if my_pos == self.start and current_position != self.start:
+            features['sucide'] = 1
+        else:
+            features['sucide'] = 0
 
 
-        distance_to_safety = self.get_maze_distance(self.start, my_pos)
+        if successor.get_agent_state(self.index).is_pacman:
+            distance_to_safety = min([self.get_maze_distance(my_pos, grens_punt) for grens_punt in self.grens_punten])
+        else:
+            distance_to_safety = 0
         features['distance_to_safety'] = distance_to_safety
 
         verboden_wegen = []
         distance_to_defender = float("inf")
-        defenders = self.get_opponents(successor)
+        defenders = self.get_opponents(game_state)
         for defender in defenders:
-            enemy_position = successor.get_agent_state(defender).get_position()
+            enemy_state = successor.get_agent_state(defender)
+            enemy_position = enemy_state.get_position()
+            if enemy_position is None:
+                previous_state = self.get_previous_observation()
+                if previous_state is not None:
+                    previous_enemy_state = previous_state.get_agent_state(defender)
+                    if previous_enemy_state.get_position() is not None:
+                        enemy_position = previous_enemy_state.get_position()
+                        enemy_state = previous_enemy_state
            
-            if enemy_position is not None and not successor.get_agent_state(defender).is_pacman:
+            if enemy_position is not None and not enemy_state.is_pacman and enemy_state.scared_timer == 0:
                 verboden_wegen.append(enemy_position)
+                x, y = enemy_position
+                for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+                    verboden_wegen.append((int(x + dx), int(y + dy)))
                 distance = self.get_maze_distance(my_pos, enemy_position)
                 if distance < distance_to_defender:
                    distance_to_defender = distance
@@ -212,8 +239,8 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
         features['Aantal_acties'] = len(successor.get_legal_actions(self.index))
 
         return features
-
-    def get_weights(self, game_state, action):
+    
+    def get_offensive_weights(self, game_state, action):
         carrying = game_state.get_agent_state(self.index).num_carrying
         enemies = [game_state.get_agent_state(i) for i in self.get_opponents(game_state)]
         dangerous_enemies = [enemie for enemie in enemies if not enemie.is_pacman and enemie.get_position() is not None and enemie.scared_timer == 0 ]
@@ -228,11 +255,15 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
                 chased = True
 
         if chased == True:
+            distance_to_safety = min([self.get_maze_distance(my_pos, grens_punt) for grens_punt in self.grens_punten])
+        
             if len(capsules) > 0:
-                return {'successor_score': 0, 'distance_to_food': 0, 'distance_to_safety' : 0, 'distance_defender' : 10, 'stop': -100,
-                'reverse': -2, 'Aantal_acties' : 1, 'distance_to_capsule' : -10}
-            else: return {'successor_score': 0, 'distance_to_food': 0, 'distance_to_safety' : -20, 'distance_defender' : 10, 'stop': -100,
-                'reverse': -2, 'Aantal_acties' : 1, 'distance_to_capsule' : 0}
+                dist_to_closest_capsule = min([self.get_maze_distance(my_pos, capsule) for capsule in capsules])
+                if distance_to_safety < dist_to_closest_capsule and carrying > 0:
+                    return {'successor_score': 0, 'distance_to_food': 0, 'distance_to_safety' : -80, 'distance_defender' : 100, 'stop': -100,
+                    'reverse': -2, 'Aantal_acties' : 1, 'distance_to_capsule' : 0, 'sucide' : -9999}
+                else: return {'successor_score': 0, 'distance_to_food': 0, 'distance_to_safety' : 0, 'distance_defender' : 100, 'stop': -100,
+                    'reverse': -2, 'Aantal_acties' : 1, 'distance_to_capsule' : -80, 'sucide' : -9999}
                 
 
         if carrying > 0 and game_state.data.timeleft < 100:
@@ -242,10 +273,7 @@ class OffensiveReflexAgent(ReflexCaptureAgent):
             return {'successor_score': 100, 'distance_to_food': -3, 'distance_to_safety' : 0, 'distance_defender' : 3, 'stop': -100,
                 'reverse': -2, 'Aantal_acties' : 1,  'distance_to_capsule' : 0}
         
-
-class DefensiveAgent(ReflexCaptureAgent):
-
-    def get_features(self, game_state, action):
+    def get_defensive_features(self, game_state, action):
         features = util.Counter()
         successor = self.get_successor(game_state, action)
         my_state = successor.get_agent_state(self.index)
@@ -292,6 +320,10 @@ class DefensiveAgent(ReflexCaptureAgent):
                 grens = midden_x -1 if self.red else midden_x
                 point_to_go = (grens, midden_y)
                 walls = game_state.data.layout.walls
+                if walls[grens][midden_y]:
+                    point_to_go = (grens, midden_y - 1)
+
+
 
     
             features['ga_naar_wachtpunt'] = self.get_maze_distance(my_pos, point_to_go)
@@ -302,21 +334,47 @@ class DefensiveAgent(ReflexCaptureAgent):
         if action == rev: features['reverse'] = 1
 
         return features
+    
+    def get_defensive_weights(self, game_state, action):
+        if game_state.get_agent_state(self.index).scared_timer > 0:
+            return {'num_invaders': 0, 'on_defense': 100, 'invader_distance': 10, 'stop': -100, 'reverse': -2, 'ga_naar_wachtpunt' : 0}
+        else:
+            return {'num_invaders': -1000, 'on_defense': 100, 'invader_distance': -10, 'stop': -100, 'reverse': -2, 'ga_naar_wachtpunt' : -2}
+        
 
-    def get_weights(self, game_state, action):
-        return {'num_invaders': -1000, 'on_defense': 100, 'invader_distance': -10, 'stop': -100, 'reverse': -2, 'ga_naar_wachtpunt' : -2}
-
-
-class AdaptiveAgent(OffensiveReflexAgent):
-
+class OffensiveReflexAgent(ReflexCaptureAgent):
     def get_features(self, game_state, action):
-        if self.is_winning(game_state):
-            return DefensiveAgent.get_features(self, game_state, action)
+        if self.is_winning(game_state) and game_state.data.timeleft < 300:
+            return self.get_defensive_features(game_state, action)
         else:
-            return OffensiveReflexAgent.get_features(self, game_state, action)
-
+            return self.get_offensive_features(game_state, action)
+        
     def get_weights(self, game_state, action):
-        if self.is_winning(game_state):
-            return DefensiveAgent.get_weights(self, game_state, action)
+         if self.is_winning(game_state) and game_state.data.timeleft < 300:
+            return self.get_defensive_weights(game_state, action)
+         else:
+             return self.get_offensive_weights(game_state, action)
+
+class DefensiveAgent(ReflexCaptureAgent):
+    def get_features(self, game_state, action):
+        enemies = [game_state.get_agent_state(enemie) for enemie in self.get_opponents(game_state)]
+        invaders = [enemie for enemie in enemies if enemie.is_pacman]
+
+        if len(invaders) > 0:
+            return self.get_defensive_features(game_state, action)
         else:
-            return OffensiveReflexAgent.get_weights(self, game_state, action)
+            return self.get_offensive_features(game_state, action)
+        
+    def get_weights(self, game_state, action):
+        enemies = [game_state.get_agent_state(enemie) for enemie in self.get_opponents(game_state)]
+        invaders = [enemie for enemie in enemies if enemie.is_pacman]
+
+        if len(invaders) > 0:
+            return self.get_defensive_weights(game_state, action)
+        else:
+            return self.get_offensive_weights(game_state, action)
+
+    
+
+    
+    
