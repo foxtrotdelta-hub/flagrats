@@ -25,7 +25,7 @@ import util
 
 from capture_agents import CaptureAgent
 from game import Directions
-from util import nearest_point
+from util import nearest_point 
 
 
 #################
@@ -172,6 +172,52 @@ class ReflexCaptureAgent(CaptureAgent):
                         list_actions = list(actions)
                         list_actions.append(next_state)
                         agenda.push((next_state, list_actions)) 
+    def determine_agents_role(self, game_state):
+        my_state = game_state.get_agent_state(self.index)
+        enemies = [game_state.get_agent_state(i) for i in self.get_opponents(game_state)]
+        invaders = [a for a in enemies if a.is_pacman ]
+
+        if my_state.scared_timer > 0:
+            return 'Offense'
+        
+        if len(invaders) == 0:
+            if self.is_winning(game_state) and game_state.data.timeleft < 300:
+                return'Defense'
+            return 'Offense'
+        
+        teammate = self.get_team(game_state)
+        teammate.remove(self.index)
+        teammate = teammate[0]
+        teammate_state = game_state.get_agent_state(teammate)
+        my_pos = my_state.get_position()
+        teammate_pos = teammate_state.get_position()
+
+        if my_pos == self.start:
+            return 'Defense'
+        if teammate_pos == self.start:
+            return 'Offense'
+        
+        if my_state.num_carrying > 4 and  teammate_state.num_carrying <= 4:
+            return 'Defense'
+        if my_state.num_carrying < 4 and teammate_state.num_carrying >= 4:
+            return 'Offense'
+        
+        existing_invaders = [invader for invader in invaders if invader.get_position() is not None]
+        if len(existing_invaders) > 0:
+            my_min_distance = min([self.get_maze_distance(my_pos, invader.get_position()) for invader in existing_invaders])
+            teammate_min_position = min([self.get_maze_distance(teammate_pos, invader.get_position()) for invader in existing_invaders])
+            if my_min_distance < teammate_min_position:
+                return 'Defense'
+            if my_min_distance > teammate_min_position:
+                return 'Offense'
+            
+        if self.index < teammate:
+            return 'Defense'
+        else:
+            return 'Offense'
+             
+
+
     
     def get_offensive_features(self, game_state, action):
         features = util.Counter()
@@ -344,32 +390,26 @@ class ReflexCaptureAgent(CaptureAgent):
 
 class OffensiveReflexAgent(ReflexCaptureAgent):
     def get_features(self, game_state, action):
-        if self.is_winning(game_state) and game_state.data.timeleft < 300:
+        if self.determine_agents_role(game_state) == 'Defense':
             return self.get_defensive_features(game_state, action)
         else:
             return self.get_offensive_features(game_state, action)
         
     def get_weights(self, game_state, action):
-         if self.is_winning(game_state) and game_state.data.timeleft < 300:
+         if self.determine_agents_role(game_state) == 'Defense':
             return self.get_defensive_weights(game_state, action)
          else:
              return self.get_offensive_weights(game_state, action)
 
 class DefensiveAgent(ReflexCaptureAgent):
     def get_features(self, game_state, action):
-        enemies = [game_state.get_agent_state(enemie) for enemie in self.get_opponents(game_state)]
-        invaders = [enemie for enemie in enemies if enemie.is_pacman]
-
-        if len(invaders) > 0:
+        if self.determine_agents_role(game_state) == 'Defense':
             return self.get_defensive_features(game_state, action)
         else:
             return self.get_offensive_features(game_state, action)
         
     def get_weights(self, game_state, action):
-        enemies = [game_state.get_agent_state(enemie) for enemie in self.get_opponents(game_state)]
-        invaders = [enemie for enemie in enemies if enemie.is_pacman]
-
-        if len(invaders) > 0:
+        if self.determine_agents_role(game_state) == 'Defense':
             return self.get_defensive_weights(game_state, action)
         else:
             return self.get_offensive_weights(game_state, action)
