@@ -80,19 +80,8 @@ class ReflexCaptureAgent(CaptureAgent):
 
 
     def choose_action(self, game_state):
-        """
-        Picks among the actions with the highest Q(s,a).
-        """
+        
         actions = game_state.get_legal_actions(self.index)
-
-        # You can profile your evaluation time by uncommenting these lines
-        # start = time.time()
-        values = [self.evaluate(game_state, a) for a in actions]
-        # print 'eval time for agent %d: %.4f' % (self.index, time.time() - start)
-
-        max_value = max(values)
-        best_actions = [a for a, v in zip(actions, values) if v == max_value]
-
         food_left = len(self.get_food(game_state).as_list())
 
         if food_left <= 2:
@@ -106,8 +95,94 @@ class ReflexCaptureAgent(CaptureAgent):
                     best_action = action
                     best_dist = dist
             return best_action
+        
+        max_depth = 2
 
-        return random.choice(best_actions)
+        opponents = self.get_opponents(game_state)
+        visible_opponents = [opponent for opponent in opponents if game_state.get_agent_state(opponent).get_position() is not None]
+
+        if not visible_opponents:
+            values = [self.evaluate(game_state, a) for a in actions]
+            max_value = max(values)
+            best_actions = [a for a, v in zip(actions, values) if v == max_value]
+            return random.choice(best_actions)
+        
+        actif_agents = [self.index] + visible_opponents
+
+        def value(state, agent_index, depth, alpha, beta):
+            if state.is_over() or depth == max_depth:
+                legal_actions = state.get_legal_actions(self.index)
+                if not legal_actions:
+                    return float("-inf")
+                return max([self.evaluate(state, action) for action in legal_actions])
+            
+            if agent_index == self.index:
+                return max_value(state, depth, alpha, beta)
+            else:
+                return min_value(state, agent_index, depth, alpha, beta)
+            
+        def max_value(state, depth, alpha, beta):
+            v = float("-inf")
+            legal_actions = state.get_legal_actions(self.index)
+            if not legal_actions:
+                return value(state, self.index, max_depth, alpha, beta)
+            current_index = actif_agents.index(self.index)
+            if current_index == len(actif_agents) - 1:
+                next_agent = actif_agents[0]
+                next_depth = depth + 1
+            else:
+                next_agent = actif_agents[current_index + 1]
+                next_depth = depth
+           
+            for action in legal_actions:
+                successor = state.generate_successor(self.index, action)
+                v = max(v, value(successor ,next_agent, next_depth, alpha, beta))
+                if v > beta:
+                    return v
+                alpha = max(alpha, v)
+            return v
+        
+        def min_value(state, agent_index, depth, alpha, beta):
+            v = float("inf")
+            legal_actions = state.get_legal_actions(agent_index)
+            if not legal_actions:
+                return value(state, agent_index, max_depth, alpha, beta)
+            current_index = actif_agents.index(agent_index)
+            if current_index == len(actif_agents) - 1:
+                next_agent = actif_agents[0]
+                next_depth = depth + 1
+            else:
+                next_agent = actif_agents[current_index + 1]
+                next_depth = depth
+            for action in legal_actions:
+                successor = state.generate_successor(agent_index, action)
+                score = value(successor, next_agent, next_depth, alpha, beta)
+                v = min(v, score)
+                if v < alpha:
+                    return v
+                beta = min(v, beta)
+            return v
+        
+        best_score = float("-inf")
+        pacman_best_move = None
+        alpha = float('-inf')
+        beta = float('inf')
+        next_agent = actif_agents[1 % len(actif_agents)]
+        next_depth = 1 if next_agent == self.index else 0
+
+        for action in actions:
+            successor = game_state.generate_successor(self.index, action)
+            score = value(successor, next_agent, next_depth, alpha, beta)
+            if score > best_score:
+                best_score = score
+                pacman_best_move= action
+
+            alpha = max(alpha, score)
+
+        return pacman_best_move if pacman_best_move else random.choice(actions)
+
+            
+
 
     def get_successor(self, game_state, action):
         """
@@ -197,11 +272,6 @@ class ReflexCaptureAgent(CaptureAgent):
         if teammate_pos == self.start:
             return 'Offense'
         
-        if my_state.num_carrying > 4 and  teammate_state.num_carrying <= 4:
-            return 'Defense'
-        if my_state.num_carrying < 4 and teammate_state.num_carrying >= 4:
-            return 'Offense'
-        
         existing_invaders = [invader for invader in invaders if invader.get_position() is not None]
         if len(existing_invaders) > 0:
             my_min_distance = min([self.get_maze_distance(my_pos, invader.get_position()) for invader in existing_invaders])
@@ -262,12 +332,11 @@ class ReflexCaptureAgent(CaptureAgent):
                    distance_to_defender = distance
 
         if len(food_list) > 0:
-            closest_food = self.breadth_first_search(my_pos, food_list, game_state, verboden_wegen)
-            features['distance_to_food'] = closest_food
+            features['distance_to_food'] = min([self.get_maze_distance(my_pos, food) for food in food_list])
 
         capsules = self.get_capsules(game_state)
         if len(capsules) > 0:
-            features['distance_to_capsule'] = self.breadth_first_search(my_pos, capsules, game_state, verboden_wegen)
+            features['distance_to_capsule'] = min([self.get_maze_distance(my_pos, capsule) for capsule in capsules])
         else: features ['distance_to_capsule'] = 0
 
         if distance_to_defender == float("inf"):
