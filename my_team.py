@@ -163,6 +163,9 @@ class ReflexCaptureAgent(CaptureAgent):
                         agenda.push((next_state, list_actions)) 
 
     def determine_agents_role(self, game_state):
+        """"
+        Past de rol en strategieen van de agenten aan in functie van de fase van het spel en de score
+        """
         my_state = game_state.get_agent_state(self.index)
         enemies = [game_state.get_agent_state(i) for i in self.get_opponents(game_state)]
         invaders = [a for a in enemies if a.is_pacman]
@@ -203,6 +206,9 @@ class ReflexCaptureAgent(CaptureAgent):
             return 'Offense'
     
     def get_forbidden_paths(self, game_state, successor, my_pos):
+        """"
+        voorkomt dat een pacman op een opponent afgaat, zorgt voor efficientere navigatie
+        """
         forbidden_paths = []
         distance_to_defender = float("inf")
         defenders = self.get_opponents(game_state)
@@ -247,6 +253,9 @@ class ReflexCaptureAgent(CaptureAgent):
         return self.breadth_first_search(my_pos, target_food, game_state, forbidden_paths)
     
     def calculate_distance_to_capsule(self, games_state, my_pos, forbidden_paths):
+        """"
+        berekent de afstand tot de power ups 
+        """
         capsules = self.get_capsules(games_state)
         return self.breadth_first_search(my_pos, capsules, games_state, forbidden_paths)
     
@@ -304,6 +313,9 @@ class ReflexCaptureAgent(CaptureAgent):
         return features
     
     def get_offensive_weights(self, game_state, action):
+        """
+        vertaalt de strategie naar weights die begrepen kunnen worden door de reflex agent
+        """
         carrying = game_state.get_agent_state(self.index).num_carrying
         enemies = [game_state.get_agent_state(i) for i in self.get_opponents(game_state)]
         dangerous_enemies = [enemy for enemy in enemies if not enemy.is_pacman and enemy.get_position() is not None and enemy.scared_timer == 0 ]
@@ -425,16 +437,8 @@ class DefensiveAgent(ReflexCaptureAgent):
         
             return self.get_offensive_features(game_state, action)
             
-                
-        
-        
     def get_weights(self, game_state, action):
             if self.determine_agents_role(game_state) == 'Defense':
                 return self.get_defensive_weights(game_state, action)
             
             return self.get_offensive_weights(game_state, action)
-            
-        
-       
-
-    
