@@ -33,7 +33,7 @@ from util import nearest_point
 #################
 
 def create_team(first_index, second_index, is_red,
-                first='OffensiveReflexAgent', second='DefensiveAgent', num_training=0):
+                first='AdaptiveAgent', second='AdaptiveAgent', num_training=0):
     """
     This function should return a list of two agents that will form the
     team, initialized using firstIndex and secondIndex as their agent
@@ -207,7 +207,7 @@ class ReflexCaptureAgent(CaptureAgent):
     
     def get_forbidden_paths(self, game_state, successor, my_pos):
         """"
-        Effficiency function that prevents a pacman from taking sub optimal paths, and the distance to opponents
+       Effficiency function that prevents a pacman from taking sub optimal paths, and the distance to opponents
         """
         forbidden_paths = []
         distance_to_defender = float("inf")
@@ -254,7 +254,7 @@ class ReflexCaptureAgent(CaptureAgent):
     
     def calculate_distance_to_capsule(self, games_state, my_pos, forbidden_paths):
         """"
-        Calculates the distance to the power-ups
+       Calculates the distance to the power-ups
         """
         capsules = self.get_capsules(games_state)
         return self.breadth_first_search(my_pos, capsules, games_state, forbidden_paths)
@@ -414,33 +414,12 @@ class ReflexCaptureAgent(CaptureAgent):
             return {'num_invaders': 0, 'on_defense': 100, 'invader_distance': 10, 'stop': -100, 'reverse': -2, 'go_to_waiting_point' : 0, 'avoid_ghost' : -1}
         else:
             return {'num_invaders': -1000, 'on_defense': 100, 'invader_distance': -10, 'stop': -100, 'reverse': -2, 'go_to_waiting_point' : -2, 'avoid_ghost' : -1}
-        
 
-class OffensiveReflexAgent(ReflexCaptureAgent):
-    """"
-    One unique agent class that changes between offensive and defensive 
-    """
+class AdaptiveAgent(ReflexCaptureAgent):
     def get_features(self, game_state, action):
             if self.determine_agents_role(game_state) == 'Defense':
                 return self.get_defensive_features(game_state, action)
             
-            return self.get_offensive_features(game_state, action)
-            
-        
-    def get_weights(self, game_state, action):
-            if self.determine_agents_role(game_state) == 'Defense':
-                return self.get_defensive_weights(game_state, action)
-            
-            return self.get_offensive_weights(game_state, action)
-        
-         
-
-class DefensiveAgent(ReflexCaptureAgent):
-    def get_features(self, game_state, action):
-        
-            if self.determine_agents_role(game_state) == 'Defense':
-                return self.get_defensive_features(game_state, action)
-        
             return self.get_offensive_features(game_state, action)
             
     def get_weights(self, game_state, action):
@@ -448,3 +427,5 @@ class DefensiveAgent(ReflexCaptureAgent):
                 return self.get_defensive_weights(game_state, action)
             
             return self.get_offensive_weights(game_state, action)
+        
+        
