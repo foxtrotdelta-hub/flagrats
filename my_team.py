@@ -164,7 +164,7 @@ class ReflexCaptureAgent(CaptureAgent):
 
     def determine_agents_role(self, game_state):
         """"
-        Past de rol en strategieen van de agenten aan in functie van de fase van het spel en de score
+        This funtion is the heart of our strategy, it returns the rolrole each agent should adopt at any given time in the match 
         """
         my_state = game_state.get_agent_state(self.index)
         enemies = [game_state.get_agent_state(i) for i in self.get_opponents(game_state)]
@@ -207,7 +207,7 @@ class ReflexCaptureAgent(CaptureAgent):
     
     def get_forbidden_paths(self, game_state, successor, my_pos):
         """"
-        voorkomt dat een pacman op een opponent afgaat, zorgt voor efficientere navigatie
+        Effficiency function that prevents a pacman from taking sub optimal paths, and the distance to opponents
         """
         forbidden_paths = []
         distance_to_defender = float("inf")
@@ -254,12 +254,15 @@ class ReflexCaptureAgent(CaptureAgent):
     
     def calculate_distance_to_capsule(self, games_state, my_pos, forbidden_paths):
         """"
-        berekent de afstand tot de power ups 
+        Calculates the distance to the power-ups
         """
         capsules = self.get_capsules(games_state)
         return self.breadth_first_search(my_pos, capsules, games_state, forbidden_paths)
     
     def calculate_distance_to_waitinpoint(self, game_state, my_pos):
+        """"
+        As descibed in our strategy we make use of crucial points in the maze to block them 
+        """
         if self.eaten_dot is not None:
                 point_to_go = self.eaten_dot
         else:
@@ -314,7 +317,7 @@ class ReflexCaptureAgent(CaptureAgent):
     
     def get_offensive_weights(self, game_state, action):
         """
-        vertaalt de strategie naar weights die begrepen kunnen worden door de reflex agent
+        Purely functional function that translates the trategy in numbers understandable by the agents 
         """
         carrying = game_state.get_agent_state(self.index).num_carrying
         enemies = [game_state.get_agent_state(i) for i in self.get_opponents(game_state)]
@@ -414,6 +417,9 @@ class ReflexCaptureAgent(CaptureAgent):
         
 
 class OffensiveReflexAgent(ReflexCaptureAgent):
+    """"
+    One unique agent class that changes between offensive and defensive 
+    """
     def get_features(self, game_state, action):
             if self.determine_agents_role(game_state) == 'Defense':
                 return self.get_defensive_features(game_state, action)
